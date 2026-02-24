@@ -7,7 +7,7 @@
 
 A hybrid collaborative + content-based recommendation system built with [LightFM](https://github.com/lyst/lightfm), designed to surface personalized live casino game recommendations for each user. This notebook covers the full experimentation pipeline: data simulation, EDA, feature engineering, model training, evaluation, and diagnostic analysis.
 
-> **Status:** Proof-of-concept on simulated data. Data layer will be swapped to real MongoDB → DuckDB → pandas once the pipeline is ready.
+> **Status:** Proof-of-concept on simulated data. Data layer will be swapped to real MongoDB → pandas once the pipeline is ready.
 
 ---
 
