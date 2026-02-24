@@ -11,7 +11,9 @@ A hybrid collaborative + content-based recommendation system built with [LightFM
 
 ---
 
-## Notebook Structure
+## Notebook Structure (Experimentation)
+
+> Cells 6 & 7 were run as separate experimental blocks. In the dev pipeline below, they are consolidated into a single `analysis` stage.
 
 | Cell | Description |
 |------|-------------|
@@ -21,10 +23,32 @@ A hybrid collaborative + content-based recommendation system built with [LightFM
 | 3 | Feature Engineering (Interaction Matrix + User/Item Features) |
 | 4 | LightFM Model Training |
 | 5 | Evaluation (Precision@K, AUC) |
-| 6 | Advanced EDA — user behaviour, sparsity |
-| 7 | Advanced Feature Engineering — ablation + correlation |
+| 6 | Advanced EDA — user behaviour, sparsity *(experimental)* |
+| 7 | Advanced Feature Engineering — ablation + correlation *(experimental)* |
 | 8 | Auto-interpretation (business + modelling takeaways) |
 | 9 | Extended visualisation suite |
+
+---
+
+## Dev Pipeline Structure
+
+How the above maps into a production-ready module layout once experimentation is complete.
+
+| Stage | Module / File | What it does | Notebook source |
+|-------|--------------|--------------|-----------------|
+| **1. Data Ingestion** | `data/loader.py` | Loads users, games, transactions from MongoDB → pandas | Cell 1 *(replace simulation)* |
+| **2. EDA** | `analysis/eda.py` | Summary stats, transaction distributions, game-type breakdowns | Cell 2 |
+| **3. Analysis** | `analysis/advanced.py` | User behaviour, matrix sparsity, ablation study, feature–score correlation — all in one pass | Cells 6 + 7 *(merged)* |
+| **4. Feature Engineering** | `features/build_features.py` | Implicit score, interaction matrix, user & item feature matrices | Cell 3 |
+| **5. Training** | `model/train.py` | LightFM WARP training loop with epoch-level evaluation | Cell 4 |
+| **6. Evaluation** | `model/evaluate.py` | Precision@K, AUC, decile ranking sanity check | Cell 5 |
+| **7. Interpretation** | `reporting/interpret.py` | Business + modelling takeaways, auto-generated summary | Cell 8 |
+| **8. Visualisation** | `reporting/plots.py` | Full plot suite (learning curves, heatmaps, decile charts) | Cell 9 |
+
+### Notes
+- Cells 6 & 7 map to a single `analysis/advanced.py` — advanced EDA and feature correlation are two sides of the same diagnostic pass and should share the same dataframe context.
+- Cell 1 (simulation) is replaced entirely by `data/loader.py` in dev; the simulation logic can be kept as `data/simulate.py` for local testing without a live DB connection.
+- `model/train.py` should enforce a **temporal train/test split** (not the random split used in the notebook).
 
 ---
 
