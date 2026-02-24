@@ -52,3 +52,5 @@ This notebook is intended as a starting point for:
 - Experimenting with **hybrid** recommenders on your own datasets using LightFM.
 - Comparing ranking losses and hyperparameters for recommendation quality.
 - Currently will have to work more on feature engineering depending on the REAL DATA. This is purely based on dummy data so the outputs aren't our priority, but the plots/visualizations are something we can consider/work with
+
+*Note: Might not work on windows--> Be sure to run this notebook on WSL, else kernel keeps dying*
