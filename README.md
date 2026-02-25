@@ -8,7 +8,7 @@
 A hybrid collaborative + content-based recommendation system built with [LightFM](https://github.com/lyst/lightfm), designed to surface personalized live casino game recommendations for each user. This notebook covers the full experimentation pipeline: data simulation, EDA, feature engineering, model training, evaluation, and diagnostic analysis.
 
 > **Status:** Proof-of-concept on simulated data. Data layer will be swapped to real MongoDB → pandas once the pipeline is ready.
-
+> *Note: The values and plots shouldn't be considered as the true nature of the data since it's just a dummy data. Purely intended to maintain the overall flow of the notebook for experiment phase*
 ---
 
 ## Notebook Structure (Experimentation)
@@ -19,14 +19,16 @@ A hybrid collaborative + content-based recommendation system built with [LightFM
 |------|-------------|
 | 0 | Installs & Imports |
 | 1 | Data Simulation (Games, Users, Transactions) |
-| 2 | EDA |
+| 2 | Basic EDA |
+| 2B | Advanced EDA (Behavior Patterns & Data Geometry) |
 | 3 | Feature Engineering (Interaction Matrix + User/Item Features) |
+| 3B | Feature Ablation (Model Selection, Pre-Final Training) |
 | 4 | LightFM Model Training |
-| 5 | Evaluation (Precision@K, AUC) |
-| 6 | Advanced EDA — user behaviour, sparsity *(experimental)* |
-| 7 | Advanced Feature Engineering — ablation + correlation *(experimental)* |
-| 8 | Auto-interpretation (business + modelling takeaways) |
-| 9 | Extended visualisation suite |
+| 5 | Final Evaluation (Precision@K, AUC, NDCG) |
+| 5B | Ranking Confusion Matrix + PR Diagnostics |
+| 6 | Post-Model Correlation Diagnostics (Feature Impact + Popularity Bias) |
+| 7 | Model Output Visualizations |
+| 8 | Auto Interpretation |
 
 ---
 
@@ -61,6 +63,7 @@ How the above maps into a production-ready module layout once experimentation is
 | Vendors | Evolution, Pragmatic Play, Ezugi, Playtech, SA Gaming |
 | Transactions | 194,164 over a 90-day window |
 | Active users | 4,766 (avg 40.7 transactions/user) |
+
 
 **User archetypes:**
 
