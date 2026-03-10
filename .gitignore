@@ -1,3 +1,5 @@
+fastapi_plan.md
+
 venv/
 *.pyc
 *.egg*
