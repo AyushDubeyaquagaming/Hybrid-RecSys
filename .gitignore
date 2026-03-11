@@ -1,5 +1,5 @@
 fastapi_plan.md
-
+fastapi_plan_v2.md
 venv/
 *.pyc
 *.egg*
@@ -26,3 +26,12 @@ lightfm/_lightfm_fast_no_openmp.pyx
 .devcontainer/
 venv/
 lightfm_source_backup/
+
+#betblitz-recsys-api
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+artifacts/
