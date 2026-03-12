@@ -32,9 +32,44 @@ uvicorn app.main:app --reload --port 8000
 ### 4. Run with Docker
 
 ```bash
-docker build -t betblitz-recsys-api .
-docker run -p 8000:8000 betblitz-recsys-api
+sudo docker build -t betblitz-recsys-api .
+sudo docker run --rm -p 8000:8000 --name betblitz-api betblitz-recsys-api
 ```
+
+Validated local flow:
+
+1. Open a terminal in `/home/ayush/lightfm_project/betblitz-recsys-api`
+2. Build the image:
+
+```bash
+sudo docker build -t betblitz-recsys-api .
+```
+
+3. Start the API container:
+
+```bash
+sudo docker run --rm -p 8000:8000 --name betblitz-api betblitz-recsys-api
+```
+
+4. In a second terminal, test the containerized API:
+
+```bash
+curl http://localhost:8000/health
+```
+
+```bash
+curl -X POST http://localhost:8000/recommend \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"5097103780","top_k":5}'
+```
+
+5. Optional: open Swagger UI at `http://localhost:8000/docs`
+
+Notes:
+
+- Use `sudo` if your user does not have permission to access `/var/run/docker.sock`.
+- Rebuild the image whenever `app/`, `requirements.txt`, `Dockerfile`, or exported files under `artifacts/` change.
+- If nothing changed since the last successful build, you can skip the build step and only run the container.
 
 ## API Usage
 
