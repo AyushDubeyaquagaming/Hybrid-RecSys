@@ -1,12 +1,13 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.config import Settings
+from app.metrics import MODEL_LOADED
 from app.services.model_service import ModelService
 
 settings = Settings()
-
 
 
 @asynccontextmanager
@@ -18,10 +19,10 @@ async def lifespan(app: FastAPI):
             num_threads=settings.PREDICT_NUM_THREADS,
         )
     except Exception as exc:
-        # Artifacts missing or corrupt — service will report unhealthy
         import logging
         logging.getLogger(__name__).warning("Failed to load artifacts: %s", exc)
     app.state.model_service = model_service
+    MODEL_LOADED.set(1 if model_service.is_loaded() else 0)
     yield
     # Shutdown: nothing to clean up for artifact-only serving
 
@@ -32,12 +33,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Prometheus: auto-instruments all routes with request count, latency, in-progress
+# and exposes /metrics
+Instrumentator().instrument(app).expose(app)
+
+
 @app.get("/")
 def root():
     return {
         "message": "BetBlitz RecSys API is running",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }
 
 

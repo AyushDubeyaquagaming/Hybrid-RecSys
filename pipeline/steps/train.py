@@ -67,6 +67,12 @@ def train_model(dataset_artifacts: dict, settings: PipelineSettings) -> LightFM:
                     f"Train P@{settings.EVAL_K}: {tr_p:.4f} | "
                     f"Test P@{settings.EVAL_K}: {te_p:.4f}"
                 )
+                if settings.MLFLOW_ENABLED:
+                    import mlflow
+                    mlflow.log_metrics(
+                        {"train_p5": float(tr_p), "test_p5": float(te_p)},
+                        step=epoch + 1,
+                    )
     except Exception as exc:
         raise ModelTrainingError(f"LightFM training failed: {exc}") from exc
 

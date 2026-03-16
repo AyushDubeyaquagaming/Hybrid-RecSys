@@ -39,6 +39,19 @@ class PipelineSettings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    # MLflow
+    MLFLOW_ENABLED: bool = False
+    MLFLOW_TRACKING_URI: str = "file:./mlruns"
+    MLFLOW_EXPERIMENT_NAME: str = "betblitz-recsys"
+
+    # Redis Feature Store
+    REDIS_ENABLED: bool = False
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: str = ""
+    REDIS_TTL_SECONDS: int = 90000  # ~25 hours
+
     # Output
     ARTIFACT_DIR: str = str(
         Path(__file__).resolve().parent.parent / "betblitz-recsys-api" / "artifacts"

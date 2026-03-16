@@ -16,4 +16,11 @@ class Settings(BaseSettings):
     # LightFM predict threads (use 1 in serving — FastAPI handles concurrency)
     PREDICT_NUM_THREADS: int = 1
 
+    # Redis Feature Store (informational health check only in v0.1)
+    REDIS_ENABLED: bool = False
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

@@ -102,3 +102,83 @@ def export_artifacts(
     print(f"  popularity_ranking.json ({len(popularity_ranking)} games)")
 
     return artifact_dir
+
+
+@task
+def write_features_to_redis(
+    dataset_artifacts: dict, settings: PipelineSettings
+) -> int:
+    """Write user and game features to Redis HashMaps.
+
+    Best-effort: logs a warning and returns 0 on any failure.
+    Returns total keys written.
+    """
+    if not settings.REDIS_ENABLED:
+        print("Redis disabled, skipping feature store write")
+        return 0
+
+    try:
+        import redis
+
+        r = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=settings.REDIS_DB,
+            password=settings.REDIS_PASSWORD or None,
+            decode_responses=True,
+        )
+        r.ping()  # fail fast if Redis is down
+
+        ufe = dataset_artifacts["ufe"]
+        ife = dataset_artifacts["ife"]
+        ttl = settings.REDIS_TTL_SECONDS
+        keys_written = 0
+
+        # Write user features
+        for _, row in ufe.iterrows():
+            key = f"user:{row['userId']}:features"
+            feature_map = {
+                "total_sessions": str(row.get("total_sessions", 0)),
+                "avg_duration_sec": str(round(row.get("avg_duration_sec", 0), 2)),
+                "unique_games": str(row.get("unique_games", 0)),
+                "unique_providers": str(row.get("unique_providers", 0)),
+                "quick_exit_rate": str(round(row.get("quick_exit_rate", 0), 4)),
+                "return_10m_rate": str(round(row.get("return_10m_rate", 0), 4)),
+                "positive_outcome_rate": str(round(row.get("positive_outcome_rate", 0), 4)),
+                "avg_engagement_intensity": str(round(row.get("avg_engagement_intensity", 0), 4)),
+                "preferred_time_of_day": str(row.get("preferred_time_of_day", "unknown")),
+                "preferred_day_of_week": str(row.get("preferred_day_of_week", "unknown")),
+                "preferred_device": str(row.get("preferred_device", "unknown")),
+                "preferred_entry_point": str(row.get("preferred_entry_point", "unknown")),
+                "recency_days": str(round(row.get("recency_days", 0), 2)),
+            }
+            r.hset(key, mapping=feature_map)
+            r.expire(key, ttl)
+            keys_written += 1
+
+        # Write game features
+        for _, row in ife.iterrows():
+            key = f"game:{row['gameId']}:features"
+            feature_map = {
+                "gameId": str(row["gameId"]),
+                "gameType": str(row.get("game_type", "unknown")),
+                "provider": str(row.get("provider", "unknown")),
+                "game_sessions": str(row.get("game_sessions", 0)),
+                "unique_users": str(row.get("unique_users", 0)),
+                "popularity_score": str(round(row.get("popularity_score", 0), 4)),
+                "popularity_bucket": str(row.get("popularity_bucket", "cold")),
+                "return_10m_rate": str(round(row.get("return_10m_rate", 0), 4)),
+                "positive_outcome_rate": str(round(row.get("positive_outcome_rate", 0), 4)),
+            }
+            r.hset(key, mapping=feature_map)
+            r.expire(key, ttl)
+            keys_written += 1
+
+        print(f"Redis feature store: wrote {keys_written} keys (TTL={ttl}s)")
+        logger.info("Redis feature store: wrote %s keys", keys_written)
+        return keys_written
+
+    except Exception as exc:
+        print(f"WARNING: Redis write failed (best-effort): {exc}")
+        logger.warning("Redis write failed (best-effort): %s", exc)
+        return 0
