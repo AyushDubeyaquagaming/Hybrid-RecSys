@@ -1,0 +1,47 @@
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class PipelineSettings(BaseSettings):
+    # MongoDB
+    MONGO_URI: str = "mongodb://100.103.177.85:27017"
+    MONGO_DB: str = "booktestdbgp_test"
+    MONGO_DIRECT_CONNECTION: bool = True
+    MONGO_TIMEOUT_MS: int = 10000
+
+    # Data filters
+    GAME_TYPE_FILTER: str = "Live Casino"
+    BET_STATUS_FILTER: str = "SETTLED"
+    SESSION_SOURCE_FILTER: str = "livecasino"
+    SESSION_JOIN_TOLERANCE_MIN: int = 60
+    DEVICE_JOIN_TOLERANCE_HOURS: int = 24
+
+    # Game name normalization
+    GAME_NAME_MAP: dict = {
+        "998:baccarat": "Baccarat",
+        "Football studio": "Football Studio",
+    }
+
+    # Model hyperparameters
+    NO_COMPONENTS: int = 32
+    LOSS: str = "warp"
+    LEARNING_RATE: float = 0.03
+    ITEM_ALPHA: float = 1e-6
+    USER_ALPHA: float = 1e-6
+    N_EPOCHS: int = 20
+    SEED: int = 42
+    PREDICT_NUM_THREADS: int = 4
+
+    # Evaluation
+    EVAL_K: int = 5
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
+
+    # Output
+    ARTIFACT_DIR: str = str(
+        Path(__file__).resolve().parent.parent / "betblitz-recsys-api" / "artifacts"
+    )
+
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
