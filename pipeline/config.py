@@ -44,6 +44,10 @@ class PipelineSettings(BaseSettings):
     MLFLOW_TRACKING_URI: str = "file:./mlruns"
     MLFLOW_EXPERIMENT_NAME: str = "betblitz-recsys"
 
+    # MLflow diagnostics / nightly EDA
+    EDA_ENABLED: bool = True
+    EDA_MAX_GAMES_TO_PLOT: int = 15
+
     # Redis Feature Store
     REDIS_ENABLED: bool = False
     REDIS_HOST: str = "localhost"

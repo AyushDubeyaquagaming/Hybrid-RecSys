@@ -71,7 +71,8 @@ def test_pipeline_runs_with_mlflow_disabled(tmp_path):
     games_df = _make_games_df()
 
     dataset_artifacts = build_lightfm_dataset.fn(events_df, games_df, settings)
-    model = train_model.fn(dataset_artifacts, settings)
+    train_result = train_model.fn(dataset_artifacts, settings)
+    model = train_result["model"]
     metrics = evaluate_model.fn(model, dataset_artifacts, settings)
     artifact_path = export_artifacts.fn(model, dataset_artifacts, games_df, settings)
 

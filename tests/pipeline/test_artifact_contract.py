@@ -76,7 +76,7 @@ def exported_artifact_dir():
         games_df = _make_games_df()
 
         dataset_artifacts = build_lightfm_dataset.fn(events_df, games_df, settings)
-        model = train_model.fn(dataset_artifacts, settings)
+        model = train_model.fn(dataset_artifacts, settings)["model"]
         export_artifacts.fn(model, dataset_artifacts, games_df, settings)
         yield tmpdir
 

@@ -70,13 +70,12 @@ def dataset_artifacts():
 class TestModelTrainsWithoutError:
     def test_fit_partial_completes(self, dataset_artifacts):
         settings = PipelineSettings(N_EPOCHS=2)
-        model = train_model.fn(dataset_artifacts, settings)
-        # If we reach here, training completed without error
-        assert model is not None
+        result = train_model.fn(dataset_artifacts, settings)
+        assert result["model"] is not None
 
     def test_model_has_components(self, dataset_artifacts):
         settings = PipelineSettings(N_EPOCHS=1)
-        model = train_model.fn(dataset_artifacts, settings)
+        model = train_model.fn(dataset_artifacts, settings)["model"]
         assert hasattr(model, "item_embeddings")
         assert model.item_embeddings is not None
 
@@ -84,7 +83,7 @@ class TestModelTrainsWithoutError:
 class TestModelCanPredict:
     def test_predict_returns_correct_length(self, dataset_artifacts):
         settings = PipelineSettings(N_EPOCHS=2)
-        model = train_model.fn(dataset_artifacts, settings)
+        model = train_model.fn(dataset_artifacts, settings)["model"]
 
         n_items = dataset_artifacts["interactions"].shape[1]
         scores = model.predict(
@@ -98,7 +97,7 @@ class TestModelCanPredict:
 
     def test_predict_returns_finite_scores(self, dataset_artifacts):
         settings = PipelineSettings(N_EPOCHS=2)
-        model = train_model.fn(dataset_artifacts, settings)
+        model = train_model.fn(dataset_artifacts, settings)["model"]
 
         n_items = dataset_artifacts["interactions"].shape[1]
         scores = model.predict(

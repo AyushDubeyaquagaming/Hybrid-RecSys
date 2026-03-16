@@ -1,3 +1,4 @@
+import tempfile
 from contextlib import nullcontext
 
 from prefect import flow
@@ -5,6 +6,7 @@ from prefect import flow
 from pipeline.config import PipelineSettings
 from pipeline.logging_utils import get_logger
 from pipeline.steps import align, build_dataset, enrich, evaluate, export, ingest, train
+from pipeline.steps.diagnostics import generate_diagnostic_plots
 
 
 logger = get_logger(__name__)
@@ -40,6 +42,12 @@ def _mlflow_log_artifacts(settings: PipelineSettings, artifact_path: str) -> Non
     if settings.MLFLOW_ENABLED:
         import mlflow
         mlflow.log_artifacts(artifact_path, artifact_path="model_artifacts")
+
+
+def _mlflow_log_diagnostics(settings: PipelineSettings, diagnostics_dir: str) -> None:
+    if settings.MLFLOW_ENABLED:
+        import mlflow
+        mlflow.log_artifacts(diagnostics_dir, artifact_path="diagnostic_plots")
 
 
 # ---------------------------------------------------------------------------
@@ -81,17 +89,32 @@ def training_flow():
             "test_nnz": dataset_artifacts["test_interactions"].nnz,
         })
 
-        # Stage 5: Training
-        model = train.train_model(dataset_artifacts, settings)
+        # Stage 5: Training — returns {"model": ..., "history": [...]}
+        train_result = train.train_model(dataset_artifacts, settings)
+        model = train_result["model"]
+        training_history = train_result["history"]
 
         # Stage 6: Evaluation
         metrics = evaluate.evaluate_model(model, dataset_artifacts, settings)
-
         _mlflow_log_metrics(settings, metrics)
+
+        # Stage 6b: Diagnostic plots (best-effort, never blocks training/export)
+        if settings.MLFLOW_ENABLED and settings.EDA_ENABLED:
+            try:
+                with tempfile.TemporaryDirectory() as plot_dir:
+                    generate_diagnostic_plots(
+                        dataset_artifacts=dataset_artifacts,
+                        events_df=events_df,
+                        training_history=training_history,
+                        output_dir=plot_dir,
+                        max_games_to_plot=settings.EDA_MAX_GAMES_TO_PLOT,
+                    )
+                    _mlflow_log_diagnostics(settings, plot_dir)
+            except Exception as exc:
+                logger.warning("Diagnostic plot generation failed (non-fatal): %s", exc)
 
         # Stage 7: Export artifacts
         artifact_path = export.export_artifacts(model, dataset_artifacts, games_df, settings)
-
         _mlflow_log_artifacts(settings, artifact_path)
 
     # Stage 8: Write features to Redis (if enabled, best-effort)

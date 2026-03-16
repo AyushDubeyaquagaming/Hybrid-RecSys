@@ -11,7 +11,12 @@ logger = get_logger(__name__)
 
 
 @task
-def train_model(dataset_artifacts: dict, settings: PipelineSettings) -> LightFM:
+def train_model(dataset_artifacts: dict, settings: PipelineSettings) -> dict:
+    """Train LightFM model.
+
+    Returns:
+        {"model": LightFM, "history": [{"epoch": int, "train_p5": float, "test_p5": float}, ...]}
+    """
     logger.info(
         "Starting model training with train_nnz=%s test_nnz=%s epochs=%s",
         dataset_artifacts["train_interactions"].nnz,
@@ -32,6 +37,8 @@ def train_model(dataset_artifacts: dict, settings: PipelineSettings) -> LightFM:
     test_interactions = dataset_artifacts["test_interactions"]
     user_features_matrix = dataset_artifacts["user_features_matrix"]
     item_features_matrix = dataset_artifacts["item_features_matrix"]
+
+    history = []
 
     try:
         for epoch in range(settings.N_EPOCHS):
@@ -67,6 +74,9 @@ def train_model(dataset_artifacts: dict, settings: PipelineSettings) -> LightFM:
                     f"Train P@{settings.EVAL_K}: {tr_p:.4f} | "
                     f"Test P@{settings.EVAL_K}: {te_p:.4f}"
                 )
+                history.append(
+                    {"epoch": epoch + 1, "train_p5": float(tr_p), "test_p5": float(te_p)}
+                )
                 if settings.MLFLOW_ENABLED:
                     import mlflow
                     mlflow.log_metrics(
@@ -77,4 +87,4 @@ def train_model(dataset_artifacts: dict, settings: PipelineSettings) -> LightFM:
         raise ModelTrainingError(f"LightFM training failed: {exc}") from exc
 
     print("Training complete ✅")
-    return model
+    return {"model": model, "history": history}
