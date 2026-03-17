@@ -44,6 +44,10 @@ class PipelineSettings(BaseSettings):
     MLFLOW_TRACKING_URI: str = "file:./mlruns"
     MLFLOW_EXPERIMENT_NAME: str = "betblitz-recsys"
 
+    # MLflow Model Registry
+    MLFLOW_REGISTRY_ENABLED: bool = True
+    MLFLOW_REGISTERED_MODEL_NAME: str = "betblitz-lightfm-recsys"
+
     # MLflow diagnostics / nightly EDA
     EDA_ENABLED: bool = True
     EDA_MAX_GAMES_TO_PLOT: int = 15
