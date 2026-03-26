@@ -21,8 +21,8 @@ jobs:
 
     - name: Install API dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install --no-deps ./lightfm_source_backup
+        python -m pip install --upgrade "pip<25"
+        pip install "setuptools<72" wheel
         pip install -r betblitz-recsys-api/requirements.txt
 
     - name: Run API tests
@@ -43,8 +43,8 @@ jobs:
 
     - name: Install pipeline dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install --no-deps ./lightfm_source_backup
+        python -m pip install --upgrade "pip<25"
+        pip install "setuptools<72" wheel
         pip install -r pipeline/requirements.txt
         pip install pytest
 
