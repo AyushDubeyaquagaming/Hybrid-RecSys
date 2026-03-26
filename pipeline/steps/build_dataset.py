@@ -102,10 +102,10 @@ def build_lightfm_dataset(
 
     # --- Build feature tables on train data only ---
     (
-        train_fe_events,
+        _,
         train_user_features_df,
         train_game_features_df,
-        train_provider_features_df,
+        _,
         train_user_game_df,
     ) = build_feature_tables_from_events(train_events_df)
 

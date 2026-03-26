@@ -1,6 +1,6 @@
 PYTHON ?= ./venv/bin/python
 
-.PHONY: demo-up demo-down retrain demo-check logs restart-api
+.PHONY: demo-up demo-down retrain push-neo4j demo-check logs restart-api
 
 # Start all services
 demo-up:
@@ -39,6 +39,20 @@ retrain:
 	@echo ""
 	@echo "Retraining complete. Restart API to pick up new artifacts:"
 	@echo "  docker compose restart api"
+
+# Push embeddings from the latest exported artifacts to Neo4j.
+# Requires NEO4J_URI, NEO4J_USER, and NEO4J_PASSWORD to be exported in the shell.
+push-neo4j:
+	MLFLOW_ENABLED=false \
+	REDIS_ENABLED=false \
+	NEO4J_ENABLED=true \
+	NEO4J_PLAYER_KEY=$${NEO4J_PLAYER_KEY:-id} \
+	NEO4J_GAME_KEY=$${NEO4J_GAME_KEY:-id} \
+	PYTHONPATH=. $(PYTHON) scripts/push_neo4j_embeddings.py
+	@echo ""
+	@echo "Neo4j push complete. Verify updates in Neo4j Browser:"
+	@echo "  MATCH (p:Player) WHERE p.embedding IS NOT NULL RETURN count(p) AS players_with_embeddings"
+	@echo "  MATCH (g:Game) WHERE g.embedding IS NOT NULL RETURN count(g) AS games_with_embeddings"
 
 # Smoke test: health + known user + cold-start user
 demo-check:

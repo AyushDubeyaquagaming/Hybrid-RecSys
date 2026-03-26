@@ -1,29 +1,13 @@
 import pandas as pd
 import numpy as np
-from pymongo import MongoClient
 from prefect import task
 
 from pipeline.config import PipelineSettings
-from pipeline.exceptions import DataValidationError, ExternalServiceError
+from pipeline.db import get_db as _get_db
 from pipeline.logging_utils import get_logger
 
 
 logger = get_logger(__name__)
-
-
-def _get_db(settings: PipelineSettings):
-    try:
-        client = MongoClient(
-            settings.MONGO_URI,
-            directConnection=settings.MONGO_DIRECT_CONNECTION,
-            serverSelectionTimeoutMS=settings.MONGO_TIMEOUT_MS,
-        )
-        client.admin.command("ping")
-        return client[settings.MONGO_DB]
-    except Exception as exc:
-        raise ExternalServiceError(
-            f"Failed to connect to MongoDB at {settings.MONGO_URI}: {exc}"
-        ) from exc
 
 
 @task

@@ -60,6 +60,16 @@ class PipelineSettings(BaseSettings):
     REDIS_PASSWORD: str = ""
     REDIS_TTL_SECONDS: int = 90000  # ~25 hours
 
+    # Neo4j Embedding Store
+    NEO4J_ENABLED: bool = False
+    NEO4J_URI: str = "bolt://localhost:7687"
+    NEO4J_USER: str = "neo4j"
+    NEO4J_PASSWORD: str = ""
+    NEO4J_DATABASE: str = "neo4j"
+    NEO4J_PLAYER_KEY: str = "id"
+    NEO4J_GAME_KEY: str = "id"
+    NEO4J_BATCH_SIZE: int = 500
+
     # Output
     ARTIFACT_DIR: str = str(
         Path(__file__).resolve().parent.parent / "betblitz-recsys-api" / "artifacts"

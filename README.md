@@ -1,160 +1,280 @@
-# Live Casino Recommendation System
-**Quantum Horizon — Phase 1 (Experimentation)**
+# BetBlitz — Live Casino Recommendation System
+
+A production-grade hybrid recommendation system for live casino games, built on [LightFM](https://github.com/lyst/lightfm). The system trains nightly from MongoDB event data, exposes recommendations over a FastAPI service, and publishes learned embeddings to Neo4j for downstream graph-based retrieval.
 
 ---
 
-## Overview
+## Architecture Overview
 
-A hybrid collaborative + content-based recommendation system built with [LightFM](https://github.com/lyst/lightfm), designed to surface personalized live casino game recommendations for each user. This notebook covers the full experimentation pipeline: data simulation, EDA, feature engineering, model training, evaluation, and diagnostic analysis.
-
-> **Status:** Proof-of-concept on simulated data. Data layer will be swapped to real MongoDB → pandas once the pipeline is ready.
-
-> *Note: The values and plots shouldn't be considered as the true nature of the data since it's just a dummy data. Purely intended to maintain the overall flow of the notebook for experiment phase*
----
-
-## Notebook Structure (Experimentation)
-
-> Cells 6 & 7 were run as separate experimental blocks. In the dev pipeline below, they are consolidated into a single `analysis` stage.
-
-| Cell | Description |
-|------|-------------|
-| 0 | Installs & Imports |
-| 1 | Data Simulation (Games, Users, Transactions) |
-| 2 | Basic EDA |
-| 2B | Advanced EDA (Behavior Patterns & Data Geometry) |
-| 3 | Feature Engineering (Interaction Matrix + User/Item Features) |
-| 3B | Feature Ablation (Model Selection, Pre-Final Training) |
-| 4 | LightFM Model Training |
-| 5 | Final Evaluation (Precision@K, AUC, NDCG) |
-| 5B | Ranking Confusion Matrix + PR Diagnostics |
-| 6 | Post-Model Correlation Diagnostics (Feature Impact + Popularity Bias) |
-| 7 | Model Output Visualizations |
-| 8 | Auto Interpretation |
-
----
-
-## Dev Pipeline Structure
-
-How the above maps into a production-ready module layout once experimentation is complete.
-
-| Stage | Module / File | What it does | Notebook source |
-|-------|--------------|--------------|-----------------|
-| **1. Data Ingestion** | `data/loader.py` | Loads users, games, transactions from MongoDB → pandas | Cell 1 *(replace simulation)* |
-| **2. EDA** | `analysis/eda.py` | Summary stats, transaction distributions, game-type breakdowns | Cell 2 |
-| **3. Analysis** | `analysis/advanced.py` | User behaviour, matrix sparsity, ablation study, feature–score correlation — all in one pass | Cells 6 + 7 *(merged)* |
-| **4. Feature Engineering** | `features/build_features.py` | Implicit score, interaction matrix, user & item feature matrices | Cell 3 |
-| **5. Training** | `model/train.py` | LightFM WARP training loop with epoch-level evaluation | Cell 4 |
-| **6. Evaluation** | `model/evaluate.py` | Precision@K, AUC, decile ranking sanity check | Cell 5 |
-| **7. Interpretation** | `reporting/interpret.py` | Business + modelling takeaways, auto-generated summary | Cell 8 |
-| **8. Visualisation** | `reporting/plots.py` | Full plot suite (learning curves, heatmaps, decile charts) | Cell 9 |
-
-### Notes
-- Cells 6 & 7 map to a single `analysis/advanced.py` — advanced EDA and feature correlation are two sides of the same diagnostic pass and should share the same dataframe context.
-- Cell 1 (simulation) is replaced entirely by `data/loader.py` in dev; the simulation logic can be kept as `data/simulate.py` for local testing without a live DB connection.
-- `model/train.py` should enforce a **temporal train/test split** (not the random split used in the notebook).
-
----
-
-## Simulated Data
-
-| Entity | Detail |
-|--------|--------|
-| Users | 5,000 across 5 archetypes |
-| Games | 80 games across 12 types (Baccarat, Roulette, Blackjack, Poker, etc.) |
-| Vendors | Evolution, Pragmatic Play, Ezugi, Playtech, SA Gaming |
-| Transactions | 194,164 over a 90-day window |
-| Active users | 4,766 (avg 40.7 transactions/user) |
-
-
-**User archetypes:**
-
-| Archetype | Share | Behaviour |
-|-----------|-------|-----------|
-| Casual | 40% | Low-stakes game-show games (CrazyTime, Monopoly) |
-| Regular | 25% | Baccarat, Roulette, DragonTiger |
-| Explorer | 20% | Plays across all game types |
-| Dormant | 10% | 0–1 sessions/week |
-| High Roller | 5% | High-stakes Baccarat, Poker, Blackjack; evening hours |
-
----
-
-## Feature Engineering
-
-**Implicit score** — composite signal per (user, game) pair:
 ```
-implicit_score = w1 * norm(play_count)
-              + w2 * norm(total_bet)
-              + w3 * norm(avg_session_duration)
-              + w4 * recency_decay
+MongoDB
+  │
+  ▼
+pipeline/           ← Prefect training pipeline (runs on host)
+  │ model artifacts
+  ├──────────────────► betblitz-recsys-api/   ← FastAPI serving layer (Docker)
+  │ embeddings
+  └──────────────────► Neo4j                  ← Graph embedding store
+                                                (consumed by downstream services)
+
+Observability
+  ├── MLflow         ← Experiment tracking + model registry (Docker)
+  ├── Prometheus     ← Metrics scraping (Docker)
+  └── Grafana        ← Dashboards (Docker)
 ```
 
-**User features:** `device`, `country`, `preferred_game_type`
-
-**Item features:** `gameType`, `vendor`, `isTopGame`, `isMostPopular`
-
-**Interaction matrix:** 4,766 × 80 — density ~5%
-
----
-
-## Model
-
-| Parameter | Value |
-|-----------|-------|
-| Algorithm | LightFM (WARP loss) |
-| Components | 64 |
-| Epochs | 30 |
-| Learning rate | 0.05 |
-| L2 regularisation | 1e-6 (user + item) |
-| Train/test split | 85/15 random (to be replaced with temporal split) |
+| Component | Role |
+|---|---|
+| `pipeline/` | Nightly Prefect training pipeline — ingests, trains, evaluates, exports |
+| `betblitz-recsys-api/` | FastAPI service — serves real-time game recommendations |
+| `scripts/push_neo4j_embeddings.py` | Standalone Neo4j embedding push utility |
+| MLflow | Experiment tracking and model registry |
+| Redis | Best-effort feature store for user and game features |
+| Neo4j | Graph store enriched with LightFM embeddings after each training run |
+| Prometheus + Grafana | API metrics and latency dashboards |
 
 ---
 
-## Results
+## Repository Structure
 
-| Metric | Train | Test |
-|--------|-------|------|
-| Precision@10 | 0.2195 | 0.0608 |
-| AUC | 0.9078 | 0.7866 |
-
-**Note:** The train/test gap indicates overfitting on simulated data — expected given the synthetic nature of interactions. Addressed by increasing regularisation and, more importantly, replacing with real data + temporal splitting.
+```
+lightfm_project/
+├── pipeline/                    # Training pipeline
+│   ├── config.py                # All runtime settings (Pydantic, env-var driven)
+│   ├── flow.py                  # Prefect flow — orchestrates all training stages
+│   ├── run.py                   # Entrypoint: python -m pipeline.run
+│   ├── steps/
+│   │   ├── ingest.py            # MongoDB → pandas ingestion
+│   │   ├── enrich.py            # Session and device enrichment
+│   │   ├── align.py             # Canonical schema alignment
+│   │   ├── features.py          # Feature engineering (implicit scores, user/game tables)
+│   │   ├── build_dataset.py     # LightFM dataset construction + temporal split
+│   │   ├── train.py             # LightFM WARP training loop
+│   │   ├── evaluate.py          # Precision@K, AUC, NDCG evaluation
+│   │   ├── diagnostics.py       # Diagnostic plot generation (MLflow artifacts)
+│   │   ├── export.py            # Artifact export to disk + Redis feature write
+│   │   └── neo4j_export.py      # Embedding export to Neo4j (best-effort, post-training)
+│   └── requirements.txt
+│
+├── betblitz-recsys-api/         # FastAPI recommendation service
+│   ├── app/
+│   │   ├── main.py              # FastAPI app, lifespan artifact loading
+│   │   ├── config.py            # Service-level settings
+│   │   ├── metrics.py           # Prometheus metric definitions
+│   │   ├── routes/
+│   │   │   ├── recommendations.py  # POST /recommend
+│   │   │   └── health.py           # GET /health
+│   │   ├── services/
+│   │   │   └── model_service.py    # Artifact loading, inference, cold-start fallback
+│   │   └── schemas/
+│   │       └── recommendation.py   # Pydantic request/response models
+│   ├── artifacts/               # Model artifacts (runtime-mounted, not committed)
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── scripts/
+│   ├── push_neo4j_embeddings.py # Load artifacts from disk, push embeddings to Neo4j
+│   └── smoke_test.sh            # End-to-end API smoke test
+│
+├── tests/
+│   └── pipeline/                # Pipeline unit tests
+│
+├── monitoring/
+│   ├── prometheus.yml           # Prometheus scrape config
+│   └── grafana/                 # Grafana provisioning and dashboard JSON
+│
+├── docker-compose.yml           # Full local stack
+└── Makefile                     # Operational commands
+```
 
 ---
 
-## Feature Correlation with Model Score
+## Prerequisites
 
-Top features by Spearman correlation with predicted score:
-
-| Feature | ρ | Direction |
-|---------|---|-----------|
-| diversity_ratio | 0.572 | + |
-| unique_players | 0.424 | + |
-| popularity_score | 0.242 | + |
-| play_count | -0.207 | − |
-
-The model rewards broadly appealing, cross-segment games. High per-user `play_count` correlating negatively suggests the model is not simply rewarding frequency — it's learning preference signal.
-
----
-
-## Known Limitations (Current Phase)
-
-- **Synthetic data** — all distributions are hand-crafted; real user behaviour will differ
-- **Random train/test split** — must be replaced with a temporal split to avoid leakage
-- **Cold-start not yet handled** — new users/games need a fallback strategy (popularity-based or content-only)
-- **No A/B framework yet** — online evaluation metrics (CTR, session depth) to be defined
-
----
-
-## Next Steps
-
-1. Replace simulated data with real MongoDB → pandas load
-2. Switch to temporal train/test split
-3. Tune regularisation to reduce overfitting
-5. Define online evaluation metrics and integrate with serving layer
-
----
-
-## Stack
-
+- Docker and Docker Compose
 - Python 3.10
-- LightFM, pandas, NumPy, SciPy, scikit-learn
-- Matplotlib, Seaborn
+- Access to the MongoDB instance (credentials via environment or `.env`)
+- Neo4j instance credentials (for embedding export)
+
+---
+
+## Quick Start
+
+### 1. Set up the virtual environment
+
+```bash
+python3.10 -m venv venv
+source venv/bin/activate
+pip install -r pipeline/requirements.txt
+```
+
+### 2. Configure environment
+
+Export the following variables or add them to a `.env` file in the repo root:
+
+```bash
+# MongoDB
+MONGO_URI=mongodb://<host>:27017
+MONGO_DB=<database>
+
+# Neo4j (required for make push-neo4j)
+NEO4J_URI=bolt://<host>:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<password>
+NEO4J_DATABASE=neo4j
+```
+
+MLflow and Redis credentials are injected automatically by `make retrain`.
+
+### 3. Start the full local stack
+
+```bash
+make demo-up
+```
+
+Starts: API, MLflow, Redis, Prometheus, Grafana. The command waits for all services to be healthy before returning.
+
+### 4. Verify the stack
+
+```bash
+make demo-check
+```
+
+### 5. Run the training pipeline
+
+```bash
+make retrain
+```
+
+Runs the Prefect training flow on the host, connecting to Dockerized MLflow and Redis. On completion, artifacts are written to `betblitz-recsys-api/artifacts/`.
+
+### 6. Push embeddings to Neo4j
+
+```bash
+export NEO4J_URI='bolt://<host>:7687'
+export NEO4J_USER='neo4j'
+export NEO4J_PASSWORD='<password>'
+export NEO4J_DATABASE='neo4j'
+
+make push-neo4j
+```
+
+### 7. Restart the API to serve fresh artifacts
+
+```bash
+make restart-api
+```
+
+---
+
+## Training Pipeline Stages
+
+| Stage | Module | Description |
+|---|---|---|
+| 1 | `ingest` | Load transactions, game details, users from MongoDB |
+| 2 | `enrich` | Session enrichment, device attribution |
+| 3 | `align` | Canonical event schema alignment |
+| 4 | `build_dataset` | Temporal train/test split, LightFM dataset and feature matrix construction |
+| 5 | `train` | LightFM WARP training (32-dimensional embeddings) |
+| 6 | `evaluate` | Precision@5, AUC, NDCG |
+| 6b | `diagnostics` | Diagnostic plots logged as MLflow artifacts |
+| 7 | `export` | Artifact serialisation to disk, user/game features to Redis |
+| 8 | MLflow registry | Log pyfunc model, register in MLflow Model Registry |
+| 9 | Redis | User and game feature HashMaps with TTL |
+| 10 | `neo4j_export` | Embedding vectors to Neo4j Player/Game nodes (best-effort) |
+
+---
+
+## Recommendation Service
+
+The FastAPI service loads pre-trained artifacts at startup and serves recommendations with sub-10ms median latency.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Service health, Redis status, model metadata |
+| `POST` | `/recommend` | Return top-K game recommendations for a player |
+
+**Inference:**
+- Known users → LightFM hybrid inference using user and item feature matrices, excluding already-played games
+- Unknown users → Popularity-ranked cold-start fallback
+
+See [betblitz-recsys-api/README.md](betblitz-recsys-api/README.md) for full API usage.
+
+---
+
+## Neo4j Embedding Store
+
+After each training run, `make push-neo4j` loads the latest artifacts from disk and publishes LightFM embedding vectors to Neo4j. These embeddings can be used by downstream services for graph-based candidate retrieval.
+
+**Graph schema:**
+
+```cypher
+(:Player { id: STRING, embedding: LIST<FLOAT>, bias: FLOAT, updated_at: DATETIME })
+(:Game   { id: STRING, embedding: LIST<FLOAT>, bias: FLOAT, updated_at: DATETIME })
+```
+
+**Post-push verification:**
+
+```cypher
+MATCH (p:Player) WHERE p.embedding IS NOT NULL RETURN count(p) AS players_with_embeddings
+MATCH (g:Game)   WHERE g.embedding IS NOT NULL RETURN count(g) AS games_with_embeddings
+```
+
+---
+
+## Observability
+
+| Service | URL | Default credentials |
+|---|---|---|
+| API Swagger | http://localhost:8000/docs | — |
+| MLflow UI | http://localhost:5000 | — |
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3001 | admin / admin |
+
+The Grafana dashboard tracks request rate, error rate, recommendation latency (p50/p95/p99), items returned, outcome distribution, and session duration coverage.
+
+---
+
+## Makefile Reference
+
+| Command | Description |
+|---|---|
+| `make demo-up` | Start all Docker services |
+| `make demo-down` | Stop all Docker services |
+| `make retrain` | Run full training pipeline (Docker services must be running) |
+| `make push-neo4j` | Push embeddings to Neo4j from latest artifacts |
+| `make demo-check` | Run API smoke tests |
+| `make restart-api` | Restart the API container to load fresh artifacts |
+| `make logs` | Tail Docker service logs |
+
+---
+
+## Testing
+
+```bash
+# Pipeline unit tests
+pytest tests/pipeline/ -v
+
+# API tests
+pytest betblitz-recsys-api/tests/ -v
+```
+
+CI runs both suites on every push and pull request to `master`.
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| ML framework | LightFM 1.17 (WARP loss, hybrid collaborative + content-based) |
+| Pipeline orchestration | Prefect 3 |
+| Data source | MongoDB (pymongo) |
+| Serving | FastAPI + Uvicorn |
+| Experiment tracking | MLflow 2.10 |
+| Feature store | Redis 7 |
+| Graph store | Neo4j 5 |
+| Observability | Prometheus + Grafana |
+| Configuration | Pydantic Settings (env-var driven) |
+| Testing | pytest |
+| Infrastructure | Docker Compose |

@@ -6,7 +6,7 @@ from prefect import flow
 
 from pipeline.config import PipelineSettings
 from pipeline.logging_utils import get_logger
-from pipeline.steps import align, build_dataset, enrich, evaluate, export, ingest, train
+from pipeline.steps import align, build_dataset, enrich, evaluate, export, ingest, neo4j_export, train
 from pipeline.steps.diagnostics import generate_diagnostic_plots
 
 
@@ -210,16 +210,24 @@ def training_flow():
         # Stage 8: Log registry-compatible model and register it (if enabled)
         if settings.MLFLOW_ENABLED and settings.MLFLOW_REGISTRY_ENABLED:
             model_uri = _mlflow_log_registry_model(settings, artifact_path)
-            if model_uri is not None:
-                _register_model(
-                    settings,
-                    model_uri,
-                    metrics,
-                    dataset_artifacts["train_interactions"].nnz,
-                )
+            _register_model(
+                settings,
+                model_uri,
+                metrics,
+                dataset_artifacts["train_interactions"].nnz,
+            )
 
     # Stage 9: Write features to Redis (if enabled, best-effort)
     export.write_features_to_redis(dataset_artifacts, settings)
+
+    # Stage 10: Push embeddings to Neo4j (if enabled, best-effort)
+    neo4j_export.export_embeddings_to_neo4j(
+        model,
+        dataset_artifacts,
+        settings,
+        player_key=settings.NEO4J_PLAYER_KEY,
+        game_key=settings.NEO4J_GAME_KEY,
+    )
 
     logger.info("Training flow completed successfully; artifacts exported to %s", artifact_path)
 

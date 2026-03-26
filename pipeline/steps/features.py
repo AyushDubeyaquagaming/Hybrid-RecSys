@@ -1,12 +1,7 @@
 import numpy as np
 import pandas as pd
-from prefect import task
 
 from pipeline.exceptions import DataValidationError
-from pipeline.logging_utils import get_logger
-
-
-logger = get_logger(__name__)
 
 
 def _mode_or_default(series, default_value):
@@ -156,17 +151,3 @@ def build_feature_tables_from_events(base_events: pd.DataFrame) -> tuple:
         provider_features_local,
         user_game_local,
     )
-
-
-@task
-def build_feature_tables(events_df: pd.DataFrame) -> tuple:
-    """Thin task wrapper around build_feature_tables_from_events."""
-    logger.info("Building feature tables from %s events", len(events_df))
-    result = build_feature_tables_from_events(events_df)
-    fe_events, user_features_df, game_features_df, provider_features_df, user_game_df = result
-    print(f"User features shape: {user_features_df.shape}")
-    print(f"Game features shape: {game_features_df.shape}")
-    print(f"Provider features shape: {provider_features_df.shape}")
-    print(f"User-game interactions: {user_game_df.shape}")
-    print(user_game_df["implicit_score"].describe().round(3))
-    return result
