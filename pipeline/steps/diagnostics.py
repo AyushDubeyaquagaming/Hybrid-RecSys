@@ -1186,6 +1186,158 @@ def _plot_feature_correlation(dataset_artifacts: dict, output_dir: str) -> None:
     plt.close(fig)
 
 
+def _json_default(value):
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
+    if isinstance(value, (pd.Timestamp,)):
+        return value.isoformat()
+    if pd.isna(value):
+        return None
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _write_json_artifact(output_dir: str, filename: str, payload: dict) -> None:
+    with open(os.path.join(output_dir, filename), "w") as fp:
+        json.dump(payload, fp, indent=2, default=_json_default)
+
+
+def _known_rate(series: pd.Series, unknown_values: set[str] | None = None) -> float:
+    if len(series) == 0:
+        return 0.0
+    if unknown_values is None:
+        unknown_values = {"unknown", "nan", "none", "null", ""}
+    normalized = series.astype(str).str.strip().str.lower()
+    return float((~normalized.isin(unknown_values)).mean())
+
+
+def _session_tier(session_count: float) -> str:
+    if session_count <= 5:
+        return "1_5"
+    if session_count <= 20:
+        return "6_20"
+    return "21_plus"
+
+
+def _preference_rate_by_group(df: pd.DataFrame, group_col: str, pref_col: str, pref_value: str) -> pd.Series:
+    return (
+        df.assign(_flag=(df[pref_col].astype(str) == pref_value).astype(float))
+        .groupby(group_col)["_flag"]
+        .mean()
+    )
+
+
+def _write_dataset_overview(events_df: pd.DataFrame, dataset_artifacts: dict, output_dir: str) -> None:
+    interactions = dataset_artifacts["interactions"]
+    train_interactions = dataset_artifacts["train_interactions"]
+    test_interactions = dataset_artifacts["test_interactions"]
+    user_feature_vocab = dataset_artifacts.get("user_feature_vocab", [])
+    item_feature_vocab = dataset_artifacts.get("item_feature_vocab", [])
+
+    sessions_per_user = events_df.groupby("userId").size() if not events_df.empty else pd.Series(dtype=float)
+    games_per_user = (
+        events_df.groupby("userId")["gameId"].nunique() if not events_df.empty else pd.Series(dtype=float)
+    )
+    implicit_scores = dataset_artifacts.get("train_user_game_df", pd.DataFrame()).get(
+        "implicit_score", pd.Series(dtype=float)
+    )
+
+    overview = {
+        "n_events": int(len(events_df)),
+        "n_active_users": int(events_df["userId"].nunique()) if not events_df.empty else 0,
+        "n_active_games": int(events_df["gameId"].nunique()) if not events_df.empty else 0,
+        "train_nnz": int(train_interactions.nnz),
+        "test_nnz": int(test_interactions.nnz),
+        "full_nnz": int(interactions.nnz),
+        "interaction_density_pct": float(
+            interactions.nnz / max(interactions.shape[0] * interactions.shape[1], 1) * 100.0
+        ),
+        "user_feature_vocab_size": int(len(user_feature_vocab)),
+        "item_feature_vocab_size": int(len(item_feature_vocab)),
+        "avg_sessions_per_user": float(sessions_per_user.mean()) if len(sessions_per_user) else 0.0,
+        "median_sessions_per_user": float(sessions_per_user.median()) if len(sessions_per_user) else 0.0,
+        "avg_unique_games_per_user": float(games_per_user.mean()) if len(games_per_user) else 0.0,
+        "median_unique_games_per_user": float(games_per_user.median()) if len(games_per_user) else 0.0,
+        "avg_implicit_score": float(implicit_scores.mean()) if len(implicit_scores) else 0.0,
+        "median_implicit_score": float(implicit_scores.median()) if len(implicit_scores) else 0.0,
+        "timestamp_min": events_df["timestamp"].min() if not events_df.empty else None,
+        "timestamp_max": events_df["timestamp"].max() if not events_df.empty else None,
+    }
+    _write_json_artifact(output_dir, "11_dataset_overview.json", overview)
+
+
+def _write_enrichment_coverage(events_df: pd.DataFrame, output_dir: str) -> None:
+    coverage = {
+        "deviceType_known_rate": _known_rate(events_df["deviceType"]) if "deviceType" in events_df.columns else 0.0,
+        "entryPoint_known_rate": _known_rate(events_df["entryPoint"]) if "entryPoint" in events_df.columns else 0.0,
+        "provider_known_rate": _known_rate(events_df["provider"]) if "provider" in events_df.columns else 0.0,
+        "gameType_known_rate": _known_rate(events_df["gameType"]) if "gameType" in events_df.columns else 0.0,
+        "deviceType_counts": events_df["deviceType"].value_counts(dropna=False).to_dict() if "deviceType" in events_df.columns else {},
+        "entryPoint_counts": events_df["entryPoint"].value_counts(dropna=False).to_dict() if "entryPoint" in events_df.columns else {},
+        "provider_counts": events_df["provider"].value_counts(dropna=False).head(10).to_dict() if "provider" in events_df.columns else {},
+        "gameType_counts": events_df["gameType"].value_counts(dropna=False).to_dict() if "gameType" in events_df.columns else {},
+    }
+    _write_json_artifact(output_dir, "12_enrichment_coverage.json", coverage)
+
+
+def _write_user_segment_summary(dataset_artifacts: dict, output_dir: str) -> None:
+    ufe = dataset_artifacts.get("ufe", pd.DataFrame()).copy()
+    if ufe.empty:
+        pd.DataFrame().to_csv(os.path.join(output_dir, "13_user_segment_summary.csv"), index=False)
+        return
+
+    ufe["session_tier"] = ufe["total_sessions"].map(_session_tier)
+    summary = (
+        ufe.groupby("session_tier")
+        .agg(
+            user_count=("userId", "count"),
+            avg_sessions=("total_sessions", "mean"),
+            median_sessions=("total_sessions", "median"),
+            avg_unique_games=("unique_games", "mean"),
+            avg_duration_sec=("avg_duration_sec", "mean"),
+            avg_quick_exit_rate=("quick_exit_rate", "mean"),
+            avg_return_10m_rate=("return_10m_rate", "mean"),
+            avg_positive_outcome_rate=("positive_outcome_rate", "mean"),
+        )
+        .reset_index()
+    )
+
+    for device in ["mobile", "desktop", "tablet", "unknown"]:
+        summary[f"pct_device_{device}"] = summary["session_tier"].map(
+            _preference_rate_by_group(ufe, "session_tier", "preferred_device", device)
+        )
+
+    for time_bucket in ["morning", "afternoon", "evening", "late_night"]:
+        summary[f"pct_time_{time_bucket}"] = summary["session_tier"].map(
+            _preference_rate_by_group(ufe, "session_tier", "preferred_time_of_day", time_bucket)
+        )
+
+    tier_order = {"1_5": 0, "6_20": 1, "21_plus": 2}
+    summary = summary.sort_values("session_tier", key=lambda s: s.map(tier_order)).reset_index(drop=True)
+    summary.to_csv(os.path.join(output_dir, "13_user_segment_summary.csv"), index=False)
+
+
+def _write_item_catalog_summary(dataset_artifacts: dict, output_dir: str) -> None:
+    ife = dataset_artifacts.get("ife", pd.DataFrame()).copy()
+    if ife.empty:
+        _write_json_artifact(output_dir, "14_item_catalog_summary.json", {})
+        return
+
+    summary = {
+        "total_games": int(len(ife)),
+        "provider_distribution": ife["provider"].astype(str).value_counts().to_dict(),
+        "game_type_distribution": ife["game_type"].astype(str).value_counts().to_dict(),
+        "popularity_bucket_distribution": ife["popularity_bucket"].astype(str).value_counts().to_dict() if "popularity_bucket" in ife.columns else {},
+        "avg_users_per_game": float(ife["unique_users"].mean()) if "unique_users" in ife.columns else 0.0,
+        "median_users_per_game": float(ife["unique_users"].median()) if "unique_users" in ife.columns else 0.0,
+        "avg_sessions_per_game": float(ife["game_sessions"].mean()) if "game_sessions" in ife.columns else 0.0,
+        "median_sessions_per_game": float(ife["game_sessions"].median()) if "game_sessions" in ife.columns else 0.0,
+        "cold_item_count": int((ife["popularity_bucket"].astype(str) == "cold").sum()) if "popularity_bucket" in ife.columns else 0,
+    }
+    _write_json_artifact(output_dir, "14_item_catalog_summary.json", summary)
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -1234,6 +1386,18 @@ def generate_diagnostic_plots(
 
     _plot_feature_correlation(dataset_artifacts, output_dir)
     logger.info("Diagnostic: feature correlation written")
+
+    _write_dataset_overview(events_df, dataset_artifacts, output_dir)
+    logger.info("Diagnostic: dataset overview written")
+
+    _write_enrichment_coverage(events_df, output_dir)
+    logger.info("Diagnostic: enrichment coverage written")
+
+    _write_user_segment_summary(dataset_artifacts, output_dir)
+    logger.info("Diagnostic: user segment summary written")
+
+    _write_item_catalog_summary(dataset_artifacts, output_dir)
+    logger.info("Diagnostic: item catalog summary written")
 
     if model is not None:
         feature_summary, sampled_interactions = compute_stability(

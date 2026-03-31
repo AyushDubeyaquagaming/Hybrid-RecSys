@@ -78,6 +78,10 @@ EXPECTED_NON_PLOT_ARTIFACTS = [
     "04_local_recommendation_explanations.csv",
     "08_feature_attribution_validation.csv",
     "10_feature_ablation_summary.json",
+    "11_dataset_overview.json",
+    "12_enrichment_coverage.json",
+    "13_user_segment_summary.csv",
+    "14_item_catalog_summary.json",
 ]
 
 
