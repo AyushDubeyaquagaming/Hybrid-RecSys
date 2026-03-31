@@ -246,6 +246,7 @@ def build_lightfm_dataset(
         "active_items": active_items,
         "ife": ife,
         "ufe": ufe,
+        "train_user_game_df": safe_train_user_game_df,
         "train_events_df": train_events_df,
         "test_events_raw_df": test_events_raw_df,
         "test_user_game_df": test_user_game_df,

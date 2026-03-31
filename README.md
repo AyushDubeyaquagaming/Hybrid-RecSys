@@ -31,7 +31,7 @@ Observability
 | MLflow | Experiment tracking and model registry |
 | Redis | Best-effort feature store for user and game features |
 | Neo4j | Graph store enriched with LightFM embeddings after each training run |
-| Prometheus + Grafana | API metrics and latency dashboards |
+| Prometheus + Grafana | API metrics, latency dashboards, and MLflow-linked training diagnostics |
 
 ---
 
@@ -232,6 +232,8 @@ MATCH (g:Game)   WHERE g.embedding IS NOT NULL RETURN count(g) AS games_with_emb
 | Grafana | http://localhost:3001 | admin / admin |
 
 The Grafana dashboard tracks request rate, error rate, recommendation latency (p50/p95/p99), items returned, outcome distribution, and session duration coverage.
+
+MLflow runs also capture a nightly diagnostics pack under `diagnostic_plots/`, including training curves, local user-to-game explanation panels, a cleaned feature-correlation heatmap, and a model-native feature attribution plot showing which metadata tokens push recommendation scores up or down.
 
 ---
 

@@ -195,9 +195,12 @@ def training_flow():
                     generate_diagnostic_plots(
                         dataset_artifacts=dataset_artifacts,
                         events_df=events_df,
+                        model=model,
                         training_history=training_history,
                         output_dir=plot_dir,
                         max_games_to_plot=settings.EDA_MAX_GAMES_TO_PLOT,
+                        eval_k=settings.EVAL_K,
+                        num_threads=settings.PREDICT_NUM_THREADS,
                     )
                     _mlflow_log_diagnostics(settings, plot_dir)
             except Exception as exc:

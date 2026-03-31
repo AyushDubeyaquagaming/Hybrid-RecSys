@@ -68,8 +68,16 @@ EXPECTED_PLOTS = [
     "01_training_curve.png",
     "02_interaction_density.png",
     "03_outcome_distribution.png",
-    "04_session_duration_coverage.png",
+    "04_local_recommendation_explanations.png",
     "05_game_popularity_coverage.png",
+    "06_feature_correlation.png",
+    "07_feature_attribution.png",
+]
+
+EXPECTED_NON_PLOT_ARTIFACTS = [
+    "04_local_recommendation_explanations.csv",
+    "08_feature_attribution_validation.csv",
+    "10_feature_ablation_summary.json",
 ]
 
 
@@ -80,7 +88,7 @@ def pipeline_outputs():
     games_df = _make_games_df()
     dataset_artifacts = build_lightfm_dataset.fn(events_df, games_df, settings)
     train_result = train_model.fn(dataset_artifacts, settings)
-    return dataset_artifacts, events_df, train_result["history"]
+    return dataset_artifacts, events_df, train_result["history"], train_result["model"]
 
 
 # ---------------------------------------------------------------------------
@@ -88,22 +96,26 @@ def pipeline_outputs():
 # ---------------------------------------------------------------------------
 
 class TestGenerateDiagnosticPlotsCreatesExpectedFiles:
-    def test_all_five_plots_created(self, pipeline_outputs, tmp_path):
-        dataset_artifacts, events_df, history = pipeline_outputs
+    def test_all_seven_plots_created(self, pipeline_outputs, tmp_path):
+        dataset_artifacts, events_df, history, model = pipeline_outputs
         generate_diagnostic_plots(
             dataset_artifacts=dataset_artifacts,
             events_df=events_df,
+            model=model,
             training_history=history,
             output_dir=str(tmp_path),
         )
         for fname in EXPECTED_PLOTS:
             assert os.path.exists(tmp_path / fname), f"Missing plot: {fname}"
+        for fname in EXPECTED_NON_PLOT_ARTIFACTS:
+            assert os.path.exists(tmp_path / fname), f"Missing artifact: {fname}"
 
     def test_plots_are_non_empty_files(self, pipeline_outputs, tmp_path):
-        dataset_artifacts, events_df, history = pipeline_outputs
+        dataset_artifacts, events_df, history, model = pipeline_outputs
         generate_diagnostic_plots(
             dataset_artifacts=dataset_artifacts,
             events_df=events_df,
+            model=model,
             training_history=history,
             output_dir=str(tmp_path),
         )
@@ -111,12 +123,17 @@ class TestGenerateDiagnosticPlotsCreatesExpectedFiles:
             path = tmp_path / fname
             if path.exists():  # training curve may be skipped if history empty
                 assert path.stat().st_size > 0, f"Empty plot file: {fname}"
+        for fname in EXPECTED_NON_PLOT_ARTIFACTS:
+            path = tmp_path / fname
+            assert path.exists(), f"Missing artifact: {fname}"
+            assert path.stat().st_size > 0, f"Empty artifact file: {fname}"
 
     def test_returns_output_dir(self, pipeline_outputs, tmp_path):
-        dataset_artifacts, events_df, history = pipeline_outputs
+        dataset_artifacts, events_df, history, model = pipeline_outputs
         result = generate_diagnostic_plots(
             dataset_artifacts=dataset_artifacts,
             events_df=events_df,
+            model=model,
             training_history=history,
             output_dir=str(tmp_path),
         )
@@ -126,16 +143,19 @@ class TestGenerateDiagnosticPlotsCreatesExpectedFiles:
 class TestTrainingCurveWithEmptyHistory:
     def test_no_crash_on_empty_history(self, pipeline_outputs, tmp_path):
         """Training curve is gracefully skipped when history is empty."""
-        dataset_artifacts, events_df, _ = pipeline_outputs
+        dataset_artifacts, events_df, _, model = pipeline_outputs
         generate_diagnostic_plots(
             dataset_artifacts=dataset_artifacts,
             events_df=events_df,
+            model=model,
             training_history=[],  # empty — e.g. N_EPOCHS < 5
             output_dir=str(tmp_path),
         )
-        # Other 4 plots must still be created
+        # Other diagnostics artifacts must still be created
         for fname in EXPECTED_PLOTS[1:]:
             assert os.path.exists(tmp_path / fname), f"Missing plot: {fname}"
+        for fname in EXPECTED_NON_PLOT_ARTIFACTS:
+            assert os.path.exists(tmp_path / fname), f"Missing artifact: {fname}"
 
 
 class TestTrainModelReturnsHistory:
@@ -174,7 +194,7 @@ class TestTrainModelReturnsHistory:
 class TestDiagnosticsDoNotBlockTraining:
     def test_plotting_failure_does_not_raise(self, pipeline_outputs, tmp_path):
         """Simulate a broken events_df — diagnostics must not crash caller."""
-        dataset_artifacts, _, history = pipeline_outputs
+        dataset_artifacts, _, history, model = pipeline_outputs
         bad_events = pd.DataFrame()  # will cause individual plot helpers to fail
 
         # The generate function itself may raise on bad input, which is fine —
@@ -183,6 +203,7 @@ class TestDiagnosticsDoNotBlockTraining:
         result = generate_diagnostic_plots(
             dataset_artifacts=dataset_artifacts,
             events_df=_make_events_df(),
+            model=model,
             training_history=history,
             output_dir=str(tmp_path),
         )
